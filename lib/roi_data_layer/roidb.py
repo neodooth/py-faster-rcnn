@@ -12,6 +12,9 @@ from fast_rcnn.config import cfg
 from fast_rcnn.bbox_transform import bbox_transform
 from utils.cython_bbox import bbox_overlaps
 import PIL
+import time
+import os
+import cPickle
 
 def prepare_roidb(imdb):
     """Enrich the imdb's roidb by adding some derived quantities that
@@ -20,9 +23,22 @@ def prepare_roidb(imdb):
     each ground-truth box. The class with maximum overlap is also
     recorded.
     """
-    sizes = [PIL.Image.open(imdb.image_path_at(i)).size
-             for i in xrange(imdb.num_images)]
+
+    cache_file = os.path.join(imdb.cache_path, imdb.name + '_prepared_roidb.pkl')
+    if imdb.__class__.__name__ == 'imagenet_ilsvrc':
+        sizes = imdb.image_sizes
+        if os.path.exists(cache_file):
+            print 'Loading prepared roidb from {}'.format(cache_file)
+            with open(cache_file, 'rb') as fid:
+                imdb.roidb = cPickle.load(fid)
+            print '{} prepared roidb loaded from {}'.format(imdb.name, cache_file)
+            return
+    else:
+        sizes = [PIL.Image.open(imdb.image_path_at(i)).size
+                 for i in xrange(imdb.num_images)]
     roidb = imdb.roidb
+
+    st = time.time()
     for i in xrange(len(imdb.image_index)):
         roidb[i]['image'] = imdb.image_path_at(i)
         roidb[i]['width'] = sizes[i][0]
@@ -42,6 +58,12 @@ def prepare_roidb(imdb):
         # max overlap > 0 => class should not be zero (must be a fg class)
         nonzero_inds = np.where(max_overlaps > 0)[0]
         assert all(max_classes[nonzero_inds] != 0)
+        if (i + 1) % 50000 == 0:
+            print 'Prepared {} images, used {:3f}s'.format(i+1, time.time() - st)
+
+    with open(cache_file, 'wb') as fid:
+        cPickle.dump(roidb, fid, cPickle.HIGHEST_PROTOCOL)
+    print 'wrote prepared roidb to {}'.format(cache_file)
 
 def add_bbox_regression_targets(roidb):
     """Add information needed to train bounding-box regressors."""
