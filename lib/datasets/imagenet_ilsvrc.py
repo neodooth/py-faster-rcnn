@@ -26,6 +26,7 @@ class imagenet_ilsvrc(datasets.imdb_imagenet):
         self._image_index = self._load_image_set_index() # ILSVRC2013_train_extra0/ILSVRC2013_train_00000001
         self._image_sizes = self._load_image_sizes()
         self._remove_negative_data()
+        self._extra_ratio_image_index_dic = self._replace_extra_ratio_data()
         # Default to roidb handler
         self._roidb_handler = self.selective_search_roidb
 
@@ -61,8 +62,12 @@ class imagenet_ilsvrc(datasets.imdb_imagenet):
         """
         Construct an image path from the image's "index" identifier.
         """
-        image_path = os.path.join(self._data_path, 'Data', 'DET',
-                                  self._image_set, index + self._image_ext)
+        if index in self._extra_ratio_image_index_dic:
+            image_path = os.path.join(self._devkit_path, 'data_to_replace',
+                'Data', 'DET', self._image_set, index + self._image_ext)
+        else:
+            image_path = os.path.join(self._data_path, 'Data', 'DET',
+                                      self._image_set, index + self._image_ext)
         assert os.path.exists(image_path), \
                 'Path does not exist: {}'.format(image_path)
         return image_path
@@ -106,6 +111,28 @@ class imagenet_ilsvrc(datasets.imdb_imagenet):
         positive_data_indices = [int(l.split(' ')[0]) for l in lines]
         self._image_index = [self._image_index[x] for x in positive_data_indices]
         self._image_sizes = [self._image_sizes[x] for x in positive_data_indices]
+
+    def _replace_extra_ratio_data(self):
+        if self._image_set != 'train':
+            return {}
+        filename = os.path.join(self._devkit_path, 'image_sizes_train_replace.txt')
+        assert os.path.exists(filename), \
+               'image_sizes_train_replace.txt not found at: {}'.format(filename)
+        print 'Replace extra ratio data according to {}'.format(filename)
+
+        with open(filename) as f:
+            lines = f.read().splitlines()
+        d = {}
+        extras = {}
+        for i, s in enumerate(self._image_index):
+            d[s] = i
+        for l in lines:
+            sp = l.split(' ')
+            w, h, im_name = sp[0], sp[1], sp[2]
+            if im_name in d:
+                self._image_sizes[d[im_name]] = (int(w), int(h))
+                extras[im_name] = d[im_name]
+        return extras
 
     def _get_default_path(self):
         """
@@ -206,7 +233,12 @@ class imagenet_ilsvrc(datasets.imdb_imagenet):
         Load image and bounding boxes info from XML file in the IMAGENET ILSVRC
         format.
         """
-        filename = os.path.join(self._data_path, 'Annotations', 'DET', self._image_set, index + '.xml')
+        if index in self._extra_ratio_image_index_dic:
+            print 'Extra large ratio image', index
+            filename = os.path.join(self._devkit_path, 'data_to_replace',
+                'Annotations', 'DET', self._image_set, index + '.xml')
+        else:
+            filename = os.path.join(self._data_path, 'Annotations', 'DET', self._image_set, index + '.xml')
         # print 'Loading: {}'.format(filename)
         def get_data_from_tag(node, tag):
             return node.getElementsByTagName(tag)[0].childNodes[0].data
