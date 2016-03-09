@@ -35,7 +35,7 @@ NET_FINAL=`grep "Final model:" ${LOG} | awk '{print $3}'`
 set -x
 
 time ./tools/test_net.py --gpu ${GPU_ID} \
-  --def models/${NET}/faster_rcnn_alt_opt/faster_rcnn_test.pt \
+  --def models/${NET}/faster_rcnn_alt_opt_ilsvrc/faster_rcnn_test.pt \
   --net ${NET_FINAL} \
   --imdb ilsvrc_2015_val \
   --cfg experiments/cfgs/faster_rcnn_alt_opt_ilsvrc.yml \
