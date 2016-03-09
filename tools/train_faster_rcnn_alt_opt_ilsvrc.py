@@ -160,15 +160,39 @@ def rpn_generate(queue=None, imdb_name=None, rpn_model_path=None, cfg=None,
     output_dir = get_output_dir(imdb, None)
     print 'Output will be saved to `{:s}`'.format(output_dir)
     # Generate proposals on the imdb
-    rpn_proposals = imdb_proposals(rpn_net, imdb)
-    # Write proposals to disk and send the proposal file path through the
-    # multiprocessing queue
+
+    start = 0
+    interval = 10000
+    all_proposals = []
     rpn_net_name = os.path.splitext(os.path.basename(rpn_model_path))[0]
-    rpn_proposals_path = os.path.join(
-        output_dir, rpn_net_name + '_proposals.pkl')
+    for i in range(start, imdb.num_images, interval):
+        # Write proposals to disk and send the proposal file path through the
+        # multiprocessing queue
+        end = min(imdb.num_images, i + interval)
+        rpn_proposals_path = os.path.join(output_dir, rpn_net_name + '_proposals_{}_{}.pkl'.format(i, end))
+
+        rpn_proposals = imdb_proposals(rpn_net, imdb, i, end)
+        all_proposals += rpn_proposals
+
+        with open(rpn_proposals_path, 'wb') as f:
+            cPickle.dump(rpn_proposals, f, cPickle.HIGHEST_PROTOCOL)
+        print 'Wrote RPN proposals [{},{}) to {}'.format(i, end, rpn_proposals_path)
+
+    for i in range(0, start, interval):
+        end = min(imdb.num_images, i + interval)
+        if i == 330000:
+            end = 333474
+        rpn_proposals_path = os.path.join(output_dir, rpn_net_name + '_proposals_{}_{}.pkl'.format(i, end))
+        print 'Loading previous RPN proposals from {}'.format(rpn_proposals_path)
+        with open(rpn_proposals_path, 'rb') as f:
+            this_proposal = cPickle.load(f)
+        all_proposals = this_proposal + all_proposals
+
+    rpn_proposals_path = os.path.join(output_dir, rpn_net_name + '_proposals.pkl')
     with open(rpn_proposals_path, 'wb') as f:
-        cPickle.dump(rpn_proposals, f, cPickle.HIGHEST_PROTOCOL)
+        cPickle.dump(all_proposals, f, cPickle.HIGHEST_PROTOCOL)
     print 'Wrote RPN proposals to {}'.format(rpn_proposals_path)
+
     queue.put({'proposal_path': rpn_proposals_path})
 
 def train_fast_rcnn(queue=None, imdb_name=None, init_model=None, solver=None,
@@ -234,6 +258,8 @@ if __name__ == '__main__':
             queue=mp_queue,
             imdb_name=args.imdb_name,
             init_model=args.pretrained_model,
+            # NEED TO SET lib/roi_data_layer/layer.py:41, the "_cur" to the iter that you want to resume from!!!
+            # init_model='output/faster_rcnn_alt_opt_ilsvrc/ILSVRC_2015_DET_train/vgg16_rpn_stage1_iter_610000.caffemodel',
             solver=solvers[0],
             max_iters=max_iters[0],
             cfg=cfg)

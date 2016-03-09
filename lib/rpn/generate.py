@@ -96,20 +96,20 @@ def im_proposals(net, im):
     scores = blobs_out['scores'].copy()
     return boxes, scores
 
-def imdb_proposals(net, imdb):
+def imdb_proposals(net, imdb, begin, end):
     """Generate RPN proposals on all images in an imdb."""
 
     _t = Timer()
-    imdb_boxes = [[] for _ in xrange(imdb.num_images)]
-    for i in xrange(imdb.num_images):
+    imdb_boxes = [[] for _ in xrange(end - begin)]
+    for i in xrange(begin, end):
         im = cv2.imread(imdb.image_path_at(i))
         _t.tic()
-        imdb_boxes[i], scores = im_proposals(net, im)
+        imdb_boxes[i - begin], scores = im_proposals(net, im)
         _t.toc()
         print 'im_proposals: {:d}/{:d} {:.3f}s' \
               .format(i + 1, imdb.num_images, _t.average_time)
         if 0:
-            dets = np.hstack((imdb_boxes[i], scores))
+            dets = np.hstack((imdb_boxes[i - begin], scores))
             # from IPython import embed; embed()
             _vis_proposals(im, dets[:3, :], thresh=0.9)
             plt.show()
